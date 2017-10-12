@@ -184,6 +184,12 @@ as a latex comment after each gantt bar."
   :type '(boolean)
   :group 'org-gantt)
 
+(defcustom org-gantt-default-hgrid nil
+  "The option :hgrid decides whether hgrid lines are shown.
+This is the default setting for :hgrid."
+  :type '(boolean)
+  :group 'org-gantt)
+
 (defconst org-gantt-start-prop :startdate
   "What is used as the start property in the constructed property list.")
 
@@ -1323,6 +1329,7 @@ PARAMS determine several options of the gantt chart."
       (setq org-gantt-hours-per-day-gv (or (plist-get params :hours-per-day) org-gantt-default-hours-per-day))
       (let* ((titlecalendar (or (plist-get params :title-calendar) org-gantt-default-title-calendar))
              (compressed-titlecalendar (or (plist-get params :compressed-title-calendar) org-gantt-default-compressed-title-calendar))
+             (hgrid (if (plist-member params :hgrid) (plist-get params :hgrid) org-gantt-default-hgrid))
              (start-date (plist-get params :start-date))
              (end-date (plist-get params :end-date))
              (start-date-list (and start-date (org-parse-time-string start-date)))
@@ -1430,6 +1437,8 @@ PARAMS determine several options of the gantt chart."
                      "\\begin{ganttchart}[time slot format=isodate, "
                      "vgrid="
                      (org-gantt-get-vgrid-style start-date-time weekend-style workday-style)
+                     (when hgrid
+                       ", hgrid")
                      (when compress
                        ", compress calendar")
                      (when today-value
