@@ -30,8 +30,11 @@
 ;;; Code:
 
 (require 'calendar)
+(require 'cl-lib)
+(require 'ob-latex) ; for org-babel-execute:latex
 
-(defgroup org-gantt nil "Customization of org-gantt.")
+(defgroup org-gantt nil "Customization of org-gantt."
+  :group 'org)
 
 (defcustom org-gantt-default-hours-per-day 8
   "The default hours in a workday.
@@ -264,7 +267,7 @@ If KEY is not found, or TABLE is nil, return DFLT which defaults to nil."
        (catch 'flag (maphash (lambda (x y)
                                (or (org-gantt-equal (gethash x table2) y)
                                    (throw 'flag nil)))
-                             table11)
+                             table1)
               (throw 'flag t))))
 
 (defun org-gantt-equal (item1 item2)
@@ -653,7 +656,7 @@ ENDTIME is the time where the previous bar ends."
     (if (and (= (org-gantt-hours-per-day) hours)
              (= 0 minutes))
         (org-gantt-change-worktime
-         endtime (encode-time (* 3600 (- 24 (org-gantt-hours-per-day))))
+         endtime (encode-time (* 3600 (- 24 (org-gantt-hours-per-day))) 0 0 0 0 0)
          #'time-add
          #'org-gantt-day-start #'org-gantt-day-end)
       endtime)))
@@ -1002,11 +1005,12 @@ to the start of the next day."
         (if (> es 0) (round (* 100  (/ css es)))  0))
     0))
 
-(defun org-gantt-get-shifts (up-start down-end compress)
+(defun org-gantt-get-shifts (up-start down-end compress &optional subelements)
   "Return the string describing the shift for pgf-gantt.
 Calculate the shift from UP-START and DOWN-END.
 If compress is non-nil calculate month shifts,
-otherwise, calculate day shifts."
+otherwise, calculate day shifts.
+Use \"group left shift=\" instead of \"bar left shift=\" for SUBELEMENTS."
   (concat
    (if subelements "group left shift=" "bar left shift=")
    (number-to-string
@@ -1125,7 +1129,7 @@ Create a bar linked to the previous bar, if LINKED is non-nil."
                   (t
                    (if linked "\\ganttlinkedbar" "\\ganttbar")))
             "["
-            (org-gantt-get-shifts up-start down-end compress)
+            (org-gantt-get-shifts up-start down-end compress subelements)
             (when id (concat ", name=" id))
             (cond
              ((equal show-progress 'always)
@@ -1276,6 +1280,14 @@ Use WEEKEND-STYLE and WORKDAY-STYLE as templates for the style."
      (when (or weekend-end work-end) ",")
      (org-gantt-days-to-vgrid-style weekend-end work-end weekend-style workday-style)
      "}")))
+
+;; Used to pass params to org-babel:
+(defun org-gantt-plist-to-alist (pl)
+  "Transform property list PL into an association list."
+  (let (al)
+    (cl-loop for p on pl by #'cddr
+	     collect (cons (car p) (cadr p))
+	     )))
 
 (defun dbgmessage (format-string &rest args)
   "FIXME: get rid of after debugging"
@@ -1447,16 +1459,11 @@ PARAMS determine several options of the gantt chart."
                        "\n\\end{tikzpicture}"))))
           (if (plist-get params :file)
               (progn
-                (defun plist-to-alist (p)
-                  "convert plist to alist, used to pass params to org-babel"
-                  (if (null p)
-                      '()
-                    (cons (cons (car p) (cadr p)) (plist-to-alist (cddr p)))))
-                (dbgmessage "%s" (plist-to-alist (append params (list :fit t :headers "\\usepackage{pgfgantt}\n"))))
+                (dbgmessage "%s" (org-gantt-plist-to-alist (append params (list :fit t :headers "\\usepackage{pgfgantt}\n"))))
                 (dbgmessage "%s" body)
-                (dbgmessage "%s" (org-babel-merge-params (plist-to-alist (append params (list :fit t :headers "\\usepackage{pgfgantt}\n")))))
+                (dbgmessage "%s" (org-babel-merge-params (org-gantt-plist-to-alist (append params (list :fit t :headers "\\usepackage{pgfgantt}\n")))))
                 (org-babel-execute:latex body
-                                         (org-babel-merge-params (plist-to-alist (append params (list :fit t :headers "\\usepackage{pgfgantt}\n")))))
+                                         (org-babel-merge-params (org-gantt-plist-to-alist (append params (list :fit t :headers "\\usepackage{pgfgantt}\n")))))
                 (insert (org-babel-result-to-file (plist-get params :file)))
                 (org-redisplay-inline-images))
             (insert body))
