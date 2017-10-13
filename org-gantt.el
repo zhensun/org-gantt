@@ -1058,12 +1058,13 @@ Return nil, if stats-cookie is not readable."
              (number-to-string progress)))
           (t nil))))
 
-(defun org-gantt-info-to-pgfgantt (gi default-date level &optional prefix ordered linked)
+(defun org-gantt-info-to-pgfgantt (gi default-date level &optional prefix ordered linked last)
   "Create a pgfgantt string from gantt-info GI.
 Prefix the created string with PREFIX.
 ORDERED determines whether the current headaline is ordered
 \(Required for correct linking of sub-subheadlines\).
-Create a bar linked to the previous bar, if LINKED is non-nil."
+Create a bar linked to the previous bar, if LINKED is non-nil.
+LAST should be non-nil for the last gant-info in the Gant Chart."
   (when gi
     (let* ((subelements (gethash :subelements gi))
            (id (gethash org-gantt-id-prop gi))
@@ -1205,7 +1206,7 @@ Create a bar linked to the previous bar, if LINKED is non-nil."
                  (if (not (equal no-date-headlines 'ignore))
                      (format-time-string "%Y-%m-%d" default-date)))
                "}"))
-            "\\\\"
+            (and (or subelements (null last)) "\\\\")
             (when org-gantt-output-debug-dates
               (concat
                "%"
@@ -1234,18 +1235,17 @@ Create a bar linked to the previous bar, if LINKED is non-nil."
             default-date
             (+ level 1)
             (concat prefix "  ")
-            (or ordered (gethash :ordered gi)))))))))
+            (or ordered (gethash :ordered gi)) last)))))))
 
-(defun org-gantt-info-list-to-pgfgantt (data default-date level &optional prefix ordered)
+(defun org-gantt-info-list-to-pgfgantt (data default-date level &optional prefix ordered last)
   "Return a pgfgantt string representing DATA.
 Prefix each line of the created representation with PREFIX.
 Create correctly linked representation, if ORDERED is non-nil."
-  (concat
-   (org-gantt-info-to-pgfgantt (car data) default-date level prefix ordered nil)
-   (mapconcat (lambda (datum)
-                (org-gantt-info-to-pgfgantt datum default-date level prefix ordered ordered))
-              (cdr data)
-              "")))
+  (apply #'concat
+	 (org-gantt-info-to-pgfgantt (car data) default-date level prefix ordered nil (and last (null (cdr data))))
+	 (cl-loop for datum on (cdr data)
+		  collect
+		  (org-gantt-info-to-pgfgantt (car datum) default-date level prefix ordered ordered (and last (null (cdr datum)))))))
 
 (defun org-gantt-linkhash-to-pgfgantt (linkhash)
   "Return a pgfgantt string representing the links in LINKHASH."
@@ -1461,7 +1461,7 @@ PARAMS determine several options of the gantt chart."
                          compressed-titlecalendar
                        titlecalendar)
                      "}\\\\\n"
-                     (org-gantt-info-list-to-pgfgantt org-gantt-info-list start-date-time 1)
+                     (org-gantt-info-list-to-pgfgantt org-gantt-info-list start-date-time 1 nil nil t)
                      (org-gantt-linkhash-to-pgfgantt *org-gantt-link-hash*)
                      "\\end{ganttchart}"
                      (when tikz-options
